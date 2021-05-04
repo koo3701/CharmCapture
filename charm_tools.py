@@ -2,7 +2,7 @@ import os
 import glob
 import numpy as np
 import cv2
-from PIL import Image
+from PIL import Image, ImageFilter
 
 def cv2pil(image):
     ''' OpenCV型 -> PIL型 '''
@@ -32,16 +32,18 @@ def compare_image(l, r):
   m = 255
   w = 0
 
-  l = l.convert('L')
+  # l = l.convert('L')
   l = np.array(l)
+  l = l[:, :, 0]
   l[0][0] = m
   l = l > threshold
   t = np.where(np.any(l, axis=0))[0]
   t = t[-1] + 1 if len(t) > 0 else l.shape[1]
   w = max(w, t)
 
-  r = r.convert('L')
+  # r = r.convert('L')
   r = np.array(r)
+  r = r[:, :, 0]
   r[0][0] = m
   r = r > threshold
   t = np.where(np.any(r, axis=0))[0]
@@ -58,15 +60,22 @@ def compare_image(l, r):
   o = o * m
   a = a * m
 
-  return np.sum((l * o) / (np.linalg.norm(l) * np.linalg.norm(o))) * \
-         np.sum((r * o) / (np.linalg.norm(r) * np.linalg.norm(o))) * \
-         np.sum((l * a) / (np.linalg.norm(l) * np.linalg.norm(a))) * \
-         np.sum((r * a) / (np.linalg.norm(r) * np.linalg.norm(a))) * \
-         np.sum((o * a) / (np.linalg.norm(o) * np.linalg.norm(a)))
+  o = np.array(Image.fromarray(o.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
+  a = np.array(Image.fromarray(a.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
+
+  o[0][0] = m
+  a[0][0] = m
+
+  # Image.fromarray(l.astype(np.uint8)).save('l.png')
+  # Image.fromarray(r.astype(np.uint8)).save('r.png')
+  # Image.fromarray(o.astype(np.uint8)).save('o.png')
+  # Image.fromarray(a.astype(np.uint8)).save('a.png')
+
+  return np.sum((o * a) / (np.linalg.norm(o) * np.linalg.norm(a)))
 
 
 
-def goseki(skill1, level1, skill2, level2, slot1, slot2, slot3):
+def charm(skill1, level1, skill2, level2, slot1, slot2, slot3):
   return {
     'skill': (
       {
@@ -87,7 +96,7 @@ def goseki(skill1, level1, skill2, level2, slot1, slot2, slot3):
 
 def trimming(path, base = 'renkin'):
   if base == 'box':
-    base = (1035, 200)
+    base = (1034, 200)
   else:
     base = (772, 212)
   if isinstance(path, str):
@@ -112,36 +121,65 @@ def trimming(path, base = 'renkin'):
     ]
   ]
 
-  return goseki(*[sample.crop(p) for p in posisions])
+  return charm(*[sample.crop(p) for p in posisions])
 
 resource = 'slot/'
 slot = {}
 for path in glob.glob(os.path.join(resource, '*.png')):
-  slot[os.path.splitext(os.path.basename(path))[0]] = Image.open(path).convert('L')
+  slot[os.path.splitext(os.path.basename(path))[0]] = Image.open(path)
 
 def get_slot(trims):
   res = []
   for s in trims['slot']:
-    r = {}
-    for level, pict in slot.items():
-      r[level] = compare_image(s, pict)
-    res.append(max(r, key=r.get))
+    m = 0
+    res.append('none')
+    for text, pict in slot.items():
+      diff = compare_image(s, pict)
+      if m < diff:
+        m = diff
+        res[-1] = text
   
   return res
 
 resource = 'skill/'
 skill_name = {}
 for path in glob.glob(os.path.join(resource, '*.png')):
-  skill_name[os.path.splitext(os.path.basename(path))[0]] = Image.open(path).convert('L')
+  skill_name[os.path.splitext(os.path.basename(path))[0]] = Image.open(path)
 
 def get_skill_name(trims):
   res = []
+  near = [
+    (['氷属性攻撃強化', '水属性攻撃強化'], (0, 1)),
+    (['氷耐性', '水耐性'], (0, 1)),
+    (['雷属性攻撃強化', '龍属性攻撃強化'], (0, 1)),
+    # (['雷耐性', '龍耐性'], (0, 1)),
+    (['属性やられ耐性', '爆破やられ耐性'], (0, 2)),
+    (['体術', '陽動'], (0, 1)),
+    (['睡眠耐性', '麻痺耐性'], (0, 2)),
+    (['翔蟲使い', '鈍器使い'], (0, 2))
+  ]
   for s in trims['skill']:
     s = s['name']
-    r = {}
-    for level, pict in skill_name.items():
-      r[level] = compare_image(s, pict)
-    res.append(max(r, key=r.get))
+    m = 0
+    res.append('none')
+    for text, pict in skill_name.items():
+      diff = compare_image(s, pict)
+      if m < diff:
+        m = diff
+        res[-1] = text
+    for text, size in near:
+      if res[-1] in text:
+        area = (s.height * size[0], 0, s.height * size[1], s.height)
+        m = 0
+        l = s.crop(area)
+        for t in text:
+          r = skill_name[t].crop(area)
+          diff = compare_image(l, r)
+          if m < diff:
+            m = diff
+            res[-1] = t
+
+
   
   return res
 
@@ -166,16 +204,19 @@ def get_skill_name(trims):
 resource = 'level/'
 skill_level = {}
 for path in glob.glob(os.path.join(resource, '*.png')):
-  skill_level[os.path.splitext(os.path.basename(path))[0]] = Image.open(path).convert('L')
+  skill_level[os.path.splitext(os.path.basename(path))[0]] = Image.open(path)
 
 def get_skill_level(trims):
   res = []
   for s in trims['skill']:
     s = s['level']
-    r = {}
-    for level, pict in skill_level.items():
-      r[level] = compare_image(s, pict)
-    res.append(max(r, key=r.get))
+    m = 0
+    res.append('none')
+    for text, pict in skill_level.items():
+      diff = compare_image(s, pict)
+      if m < diff:
+        m = diff
+        res[-1] = text
   
   return res
 
@@ -196,6 +237,8 @@ def video2frame(path, threshold = 0.9, box = 'renkin'):
     ret, frame = cap.read()
     if ret == True:
       frame = cv2pil(frame)
+      if frame.width != 1280 or frame.height != 720:
+        frame = frame.resize((1280, 720), Image.LANCZOS)
       if first:
         first = False
         prev = frame
@@ -221,7 +264,7 @@ def video2frame(path, threshold = 0.9, box = 'renkin'):
     else:
       break
 
-def get_goseki_info(frame, type='renkin'):
+def get_charm_info(frame, type='renkin'):
   trims = trimming(frame, type)
 
   skill = get_skill_name(trims)
@@ -240,30 +283,30 @@ def get_goseki_info(frame, type='renkin'):
   slot[1] = slot[1] if slot[1] != 'none' else ''
   slot[2] = slot[2] if slot[2] != 'none' else ''
 
-  return goseki(skill[0], level[0], skill[1], level[1], slot[0], slot[1], slot[2])
+  return charm(skill[0], level[0], skill[1], level[1], slot[0], slot[1], slot[2])
 
 
-def print_goseki(goseki):
+def print_charm(charm):
   print('\t'.join([
-    goseki['skill'][0]['name'],
-    goseki['skill'][0]['level'],
-    goseki['skill'][1]['name'],
-    goseki['skill'][1]['level'],
-    goseki['slot'][0],
-    goseki['slot'][1],
-    goseki['slot'][2],
+    charm['skill'][0]['name'],
+    charm['skill'][0]['level'],
+    charm['skill'][1]['name'],
+    charm['skill'][1]['level'],
+    charm['slot'][0],
+    charm['slot'][1],
+    charm['slot'][2],
   ]))
 
-def output_goseki(filename, goseki):
+def output_charm(filename, charm):
   with open(filename, 'a', encoding='utf-8') as f:
     f.write('\t'.join([
-      goseki['skill'][0]['name'],
-      goseki['skill'][0]['level'],
-      goseki['skill'][1]['name'],
-      goseki['skill'][1]['level'],
-      goseki['slot'][0],
-      goseki['slot'][1],
-      goseki['slot'][2],
+      charm['skill'][0]['name'],
+      charm['skill'][0]['level'],
+      charm['skill'][1]['name'],
+      charm['skill'][1]['level'],
+      charm['slot'][0],
+      charm['slot'][1],
+      charm['slot'][2],
     ]))
     f.write('\n')
 

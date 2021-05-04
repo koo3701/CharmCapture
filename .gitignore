@@ -148,8 +148,8 @@ check_skill_level.py
 check_skill_name.py
 check_slot.py
 create_skill_name.py
-detect_goseki_info_from_box.py
-detect_goseki_info_from_renkin.py
+detect_charm_info_from_box.py
+detect_charm_info_from_renkin.py
 trimming.py
 video2frame.py
 *.txt
