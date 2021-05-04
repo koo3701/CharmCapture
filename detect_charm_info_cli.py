@@ -26,6 +26,7 @@ for path in glob.glob(os.path.join(directory, '*.mp4')):
     os.makedirs(savepath, exist_ok=True)
   for frame in frames:
     info = charm_tools.get_charm_info(frame, type)
+    charm_tools.print_charm(info)
 
     if varbose:
       frame.save(os.path.join(savepath, str(num) + '.png'))
