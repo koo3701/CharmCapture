@@ -14,7 +14,7 @@ args = parser.parse_args()
 
 directory = args.directory
 varbose = args.verbose
-type = args.type if args.type in ['renkin', 'box'] else 'renkin'
+type = args.type if args.type in ['renkin', 'box', 'rinnne'] else 'renkin'
 
 if varbose:
   num = 1
@@ -29,7 +29,15 @@ for path in glob.glob(os.path.join(directory, '*.mp4')):
     charm_tools.print_charm(info)
 
     if varbose:
-      frame.save(os.path.join(savepath, str(num) + '.png'))
-      trims = charm_tools.trimming(os.path.join(savepath, str(num) + '.png'))
+      filename = str(num) + '_' + \
+        (info['skill'][0]['name'] if info['skill'][0]['name'] != '' else 'none') + '_' + \
+        (info['skill'][0]['level'] if info['skill'][0]['level'] != '' else '0') + '_' + \
+        (info['skill'][1]['name'] if info['skill'][1]['name'] != '' else 'none') + '_' + \
+        (info['skill'][1]['level'] if info['skill'][1]['level'] != '' else '0') + '_' + \
+        (info['slot'][0] if info['slot'][0] != '' else '0') + '_' + \
+        (info['slot'][1] if info['slot'][1] != '' else '0') + '_' + \
+        (info['slot'][2] if info['slot'][2] != '' else '0') + '.png'
+      frame.save(os.path.join(savepath, filename))
+      trims = charm_tools.trimming(os.path.join(savepath, filename), type)
       charm_tools.save(os.path.join(savepath, str(num)), trims)
       num += 1

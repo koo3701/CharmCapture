@@ -150,6 +150,7 @@ check_slot.py
 create_skill_name.py
 detect_charm_info_from_box.py
 detect_charm_info_from_renkin.py
+pickup_difference.py
 trimming.py
 video2frame.py
 *.txt

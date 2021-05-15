@@ -27,7 +27,7 @@ def pil2cv(image):
         new_image = cv2.cvtColor(new_image, cv2.COLOR_RGBA2BGRA)
     return new_image
 
-def compare_image(l, r):
+def compare_image(l, r, performance=False):
   threshold = 150
   m = 255
   w = 0
@@ -52,26 +52,38 @@ def compare_image(l, r):
 
   l = l[:, :w]
   r = r[:, :w]
-  o = l | r
-  a = l & r
+  if performance:
+    o = l | r
+    a = l & r
+  x = l ^ r
+  z = np.zeros(l.shape)
 
-  l = l * m
-  r = r * m
-  o = o * m
-  a = a * m
+  if performance:
+    o = o * m
+    a = a * m
+  x = x * m
 
-  o = np.array(Image.fromarray(o.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
-  a = np.array(Image.fromarray(a.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
+  if performance:
+    o = np.array(Image.fromarray(o.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
+    a = np.array(Image.fromarray(a.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
+  x = np.array(Image.fromarray(x.astype(np.uint8)).filter(ImageFilter.MedianFilter(3)))
 
-  o[0][0] = m
-  a[0][0] = m
+  if performance:
+    o[0][0] = m
+    a[0][0] = m
+  x[0][0] = m
+  z[0][0] = m
 
   # Image.fromarray(l.astype(np.uint8)).save('l.png')
   # Image.fromarray(r.astype(np.uint8)).save('r.png')
   # Image.fromarray(o.astype(np.uint8)).save('o.png')
   # Image.fromarray(a.astype(np.uint8)).save('a.png')
 
-  return np.sum((o * a) / (np.linalg.norm(o) * np.linalg.norm(a)))
+  if performance:
+    oa = np.sum((o * a) / (np.linalg.norm(o) * np.linalg.norm(a)))
+  else:
+    oa = 1
+  return np.sum((x * z) / (np.linalg.norm(x) * np.linalg.norm(z))) * oa
 
 
 
@@ -97,19 +109,25 @@ def charm(skill1, level1, skill2, level2, slot1, slot2, slot3):
 def trimming(path, base = 'renkin'):
   if base == 'box':
     base = (1034, 200)
+  elif base == 'rinnne':
+    base = (699, 212)
   else:
     base = (772, 212)
   if isinstance(path, str):
     sample = Image.open(path)
   else:
     sample = path
+  
+
+  if sample.width != 1280 or sample.height != 720:
+    sample = sample.resize((1280, 720), Image.LANCZOS)
 
   posisions = [
     (
-      p[0] / 1280 * sample.width,
-      p[1] / 720 * sample.height,
-      (p[0] + p[2]) / 1280 * sample.width,
-      (p[1] + p[3]) / 720 * sample.height,
+      p[0],
+      p[1],
+      p[0] + p[2],
+      p[1] + p[3],
     ) for p in [
       [  0 + base[0],  65 + base[1], 214, 23], # skill 1
       [201 + base[0],  92 + base[1],  15, 20], # level 1
@@ -149,15 +167,30 @@ for path in glob.glob(os.path.join(resource, '*.png')):
 def get_skill_name(trims):
   res = []
   near = [
-    (['氷属性攻撃強化', '水属性攻撃強化'], (0, 1)),
-    (['氷耐性', '水耐性'], (0, 1)),
+    (['氷属性攻撃強化', '水属性攻撃強化'], (0, 0.4)),
+    (['火属性攻撃強化', '水属性攻撃強化'], (0, 1)),
+    (['氷耐性', '水耐性'], (0, 0.4)),
+    (['火耐性', '水耐性'], (0, 1)),
+    (['氷耐性', '毒耐性'], (0.7, 1)),
     (['雷属性攻撃強化', '龍属性攻撃強化'], (0, 1)),
-    # (['雷耐性', '龍耐性'], (0, 1)),
+    (['雷耐性', '龍耐性'], (0, 1)),
     (['属性やられ耐性', '爆破やられ耐性'], (0, 2)),
     (['体術', '陽動'], (0, 1)),
+    (['体術', '業物'], (0.5, 1.0)),
+    (['防御', '耐震'], (0, 1)),
+    (['不屈', '逆襲'], (0, 1)),
+    (['逆恨み', '逆襲'], (2, 3)),
     (['睡眠耐性', '麻痺耐性'], (0, 2)),
-    (['翔蟲使い', '鈍器使い'], (0, 2))
+    (['睡眠属性強化', '爆破属性強化'], (0, 1)),
+    (['麻痺属性強化', '爆破属性強化'], (0.5, 1.5)),
+    (['翔蟲使い', '鈍器使い'], (0, 2)),
+    (['ブレ抑制', '反動軽減'], (0, 2)),
+    (['地質学', '植生学'], (0, 2)),
+    (['ランナー', '達人芸'], (1, 2)),
+    # (['貫通弾・貫通矢強化', '通常弾・連射矢強化'], (0, 2)),
+    (['抜刀術【技】', '抜刀術【力】'], (4, 5)),
   ]
+  width = 17
   for s in trims['skill']:
     s = s['name']
     m = 0
@@ -169,12 +202,12 @@ def get_skill_name(trims):
         res[-1] = text
     for text, size in near:
       if res[-1] in text:
-        area = (s.height * size[0], 0, s.height * size[1], s.height)
+        area = (width * size[0], 0, width * size[1], s.height)
         m = 0
         l = s.crop(area)
         for t in text:
           r = skill_name[t].crop(area)
-          diff = compare_image(l, r)
+          diff = compare_image(l, r, True)
           if m < diff:
             m = diff
             res[-1] = t
@@ -222,16 +255,17 @@ def get_skill_level(trims):
 
 def video2frame(path, threshold = 0.9, box = 'renkin'):
   if box == 'box':
-    box = [633, 359, 364, 241]
+    boxes = [[633, 359, 364, 241], [785, 576, 23, 26]]
+  elif box == 'rinnne':
+    boxes = [[320, 366, 331, 169], [458, 535, 25, 28]]
   else:
-    box = (287, 118, 448, 426)
+    boxes = [[287, 118, 448, 426]]
   cap = cv2.VideoCapture(path)
 
   width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
   height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-  box = (box[0] / 1280 * width, box[1] / 720 * height, (box[0] + box[2]) / 1280 * width, (box[1] + box[3]) / 720 * height)
+  boxes = [(box[0], box[1], box[0] + box[2], box[1] + box[3]) for box in boxes]
 
-  first = True
   prev = None
   while cap.isOpened():
     ret, frame = cap.read()
@@ -239,27 +273,28 @@ def video2frame(path, threshold = 0.9, box = 'renkin'):
       frame = cv2pil(frame)
       if frame.width != 1280 or frame.height != 720:
         frame = frame.resize((1280, 720), Image.LANCZOS)
-      if first:
-        first = False
+      if prev is None:
         prev = frame
         yield frame
         continue
 
-      p = prev.crop(box)
-      p = p.convert('L')
-      p = np.array(p)
-      p[0][0] = 128
-      p = (p > 127) * 255
+      for box in boxes:
+        p = prev.crop(box)
+        p = p.convert('L')
+        p = np.array(p)
+        p[0][0] = 128
+        p = (p > 127) * 255
 
-      n = frame.crop(box)
-      n = n.convert('L')
-      n = np.array(n)
-      n[0][0] = 128
-      n = (n > 127) * 255
+        n = frame.crop(box)
+        n = n.convert('L')
+        n = np.array(n)
+        n[0][0] = 128
+        n = (n > 127) * 255
 
-      diff = np.sum((p / (np.linalg.norm(p))) * (n / (np.linalg.norm(n))))
-      if diff < threshold:
-        yield frame
+        diff = np.sum((p / (np.linalg.norm(p))) * (n / (np.linalg.norm(n))))
+        if diff < threshold:
+          yield frame
+          break
       prev = frame
     else:
       break
